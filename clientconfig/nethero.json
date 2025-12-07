@@ -76,32 +76,8 @@
           "order_group": ""
         },
         {
-          "protocol": "S2CDelMapHero",
-          "order": 0,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
           "protocol": "S2CAddMapHero",
           "order": 8,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CAddMapHero",
-          "order": 9,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CDelMapHero",
-          "order": 10,
           "type": "必然回包",
           "condition": "",
           "count": "一次",

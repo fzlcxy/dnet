@@ -4,8 +4,19 @@ GUI主窗口实现
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import os
+import sys
 import json
 from typing import Dict, List, Optional
+
+
+def get_base_path():
+    """获取基础路径，兼容打包后运行"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller打包后运行
+        return os.path.dirname(sys.executable)
+    else:
+        # 开发环境运行
+        return os.path.dirname(os.path.abspath(__file__))
 
 from dnet_parser import DnetParser, DnetFile, Protocol
 from config_manager import ConfigManager, C2SConfig, C2SMapping, S2CResponse, OrderGroup
@@ -369,10 +380,16 @@ class MainWindow(tk.Tk):
         # 应用主题和样式
         self._setup_style()
 
-        # 初始化路径
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.root_dir = os.path.dirname(script_dir)
-        self.settings_file = os.path.join(script_dir, 'gui_settings.json')
+        # 初始化路径（兼容打包后运行）
+        base_path = get_base_path()
+        if getattr(sys, 'frozen', False):
+            # 打包后：exe所在目录
+            self.root_dir = base_path
+            self.settings_file = os.path.join(base_path, 'gui_settings.json')
+        else:
+            # 开发环境：clientscript的上级目录
+            self.root_dir = os.path.dirname(base_path)
+            self.settings_file = os.path.join(base_path, 'gui_settings.json')
 
         # 加载保存的设置或使用默认值
         settings = self._load_settings()

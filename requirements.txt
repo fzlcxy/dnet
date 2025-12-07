@@ -1,0 +1,5 @@
+# 协议配置GUI工具依赖
+# 注: tkinter是Python标准库，无需额外安装
+
+# 打包工具 (仅开发时需要)
+pyinstaller>=5.0
