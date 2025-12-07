@@ -1,0 +1,14 @@
+#DNET
+C2SMODULE:netfile.nethuodong.py
+S2CMODULE:nethuodong.py
+DESC:英雄相关协议
+
+
+S2C.0xd1.
+	1.S2CRefreshHD.刷新活动
+		iID.4b.活动ID
+		sName.2ps.英雄名称
+		iHeroID.4b.英雄ID
+
+
+	

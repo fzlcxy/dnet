@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openspec list:*)",
+      "Bash(mkdir:*)",
+      "Bash(openspec validate:*)",
+      "Bash(python:*)",
+      "Bash(cat:*)",
+      "Bash(timeout 3 python:*)",
+      "Bash(timeout 2 python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
