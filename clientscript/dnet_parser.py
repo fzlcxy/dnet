@@ -1,5 +1,5 @@
 """
-.dnet文件解析模块
+.dnet文件解析模块 - 支持新格式
 """
 import os
 import re
@@ -32,6 +32,7 @@ class DnetFile:
     description: str
     c2s_module: str
     s2c_module: str
+    version: str = ""
     c2s_list: List[Protocol] = field(default_factory=list)
     s2c_list: List[Protocol] = field(default_factory=list)
 
@@ -43,7 +44,7 @@ class DnetFile:
 
 
 class DnetParser:
-    """解析.dnet协议文件"""
+    """解析.dnet协议文件（新格式）"""
 
     def parse_file(self, file_path: str, proto_root: str = "") -> Optional[DnetFile]:
         """解析单个.dnet文件"""
@@ -71,45 +72,73 @@ class DnetParser:
         lines = content.split('\n')
         current_section = None  # 'C2S' or 'S2C'
         current_protocol = None
+        in_forlist = False  # 是否在forlist块中
 
         for line in lines:
             line_stripped = line.strip()
 
-            # 解析头部信息
-            if line_stripped.startswith('C2SMODULE'):
-                match = re.match(r'C2SMODULE[：:]\s*(.+)', line_stripped)
-                if match:
-                    dnet.c2s_module = match.group(1).strip()
+            # 跳过空行和注释
+            if not line_stripped or line_stripped.startswith('#'):
                 continue
 
-            if line_stripped.startswith('S2CMODULE'):
-                match = re.match(r'S2CMODULE[：:]\s*(.+)', line_stripped)
+            # 解析头部信息 - VERSION
+            if line_stripped.startswith('VERSION'):
+                match = re.match(r'VERSION[：:]\s*(.+)', line_stripped)
                 if match:
-                    dnet.s2c_module = match.group(1).strip()
+                    dnet.version = match.group(1).strip()
                 continue
 
+            # 解析头部信息 - DESC
             if line_stripped.startswith('DESC'):
                 match = re.match(r'DESC[：:]\s*(.+)', line_stripped)
                 if match:
                     dnet.description = match.group(1).strip()
                 continue
 
-            # 解析S2C/C2S段落开始
-            if line_stripped.startswith('S2C.'):
+            # 解析头部信息 - CMODULE (C2S模块)
+            if line_stripped.startswith('CMODULE'):
+                match = re.match(r'CMODULE[：:]\s*(.+)', line_stripped)
+                if match:
+                    dnet.c2s_module = match.group(1).strip()
+                continue
+
+            # 解析头部信息 - SMODULE (S2C模块)
+            if line_stripped.startswith('SMODULE'):
+                match = re.match(r'SMODULE[：:]\s*(.+)', line_stripped)
+                if match:
+                    dnet.s2c_module = match.group(1).strip()
+                continue
+
+            # 解析GS2C段落开始（S2C协议）
+            if line_stripped.startswith('GS2C:'):
                 current_section = 'S2C'
                 current_protocol = None
+                in_forlist = False
                 continue
 
-            if line_stripped.startswith('C2S.'):
+            # 解析C2GS段落开始（C2S协议）
+            if line_stripped.startswith('C2GS:'):
                 current_section = 'C2S'
                 current_protocol = None
+                in_forlist = False
                 continue
 
-            # 解析协议定义（以数字开头，如 1.C2SUpdateHeroName.更新英雄名称）
-            protocol_match = re.match(r'^\d+\.([A-Za-z0-9_]+)\.(.+)$', line_stripped)
+            # 解析forlist开始（嵌套结构，暂时跳过内部字段）
+            if line_stripped.startswith('forlist '):
+                in_forlist = True
+                continue
+
+            # forlist内部的字段（缩进更深），暂时跳过
+            if in_forlist and line.startswith('\t\t\t'):
+                continue
+            else:
+                in_forlist = False
+
+            # 解析协议定义（新格式：1:C2SUpdateHeroName:更新英雄名称）
+            protocol_match = re.match(r'^(\d+):([A-Za-z0-9_]+):(.+)$', line_stripped)
             if protocol_match and current_section:
-                protocol_name = protocol_match.group(1)
-                protocol_desc = protocol_match.group(2)
+                protocol_name = protocol_match.group(2)
+                protocol_desc = protocol_match.group(3)
                 current_protocol = Protocol(
                     name=protocol_name,
                     description=protocol_desc
@@ -120,8 +149,8 @@ class DnetParser:
                     dnet.s2c_list.append(current_protocol)
                 continue
 
-            # 解析字段（如 iHeroID.4b.英雄ID）
-            field_match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)\.([^.]+)\.(.+)$', line_stripped)
+            # 解析字段（新格式：iHeroID,4,英雄ID）
+            field_match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*),([^,]+),(.+)$', line_stripped)
             if field_match and current_protocol:
                 field_name = field_match.group(1)
                 field_type = field_match.group(2)
@@ -165,7 +194,10 @@ if __name__ == '__main__':
 
     for dnet in dnet_files:
         print(f"\n=== {dnet.relative_path} ===")
+        print(f"版本: {dnet.version}")
         print(f"描述: {dnet.description}")
+        print(f"C2S模块: {dnet.c2s_module}")
+        print(f"S2C模块: {dnet.s2c_module}")
         print(f"C2S协议 ({len(dnet.c2s_list)}):")
         for p in dnet.c2s_list:
             print(f"  - {p.name}: {p.description}")

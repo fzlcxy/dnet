@@ -19,6 +19,7 @@ class S2CResponse:
     count: str = "一次"  # "一次" 或 "多次"
     order_group: str = ""  # 顺序组名称，相同组名表示顺序不确定，空表示确定顺序
     ordered: bool = True  # 是否有序，True=顺序(数字序号)，False=无序(x标记)
+    cmodule: str = ""  # S2C协议所属dnet文件的CMODULE
 
 
 @dataclass
@@ -153,7 +154,9 @@ class ConfigManager:
                             "type": r.type,
                             "condition": r.condition,
                             "count": r.count,
-                            "order_group": r.order_group
+                            "order_group": r.order_group,
+                            "ordered": r.ordered,
+                            "cmodule": r.cmodule
                         }
                         for r in mapping.responses
                     ]
@@ -183,7 +186,8 @@ class ConfigManager:
                     condition=r.get("condition", ""),
                     count=r.get("count", "一次"),
                     order_group=order_group,
-                    ordered=r.get("ordered", True)  # 兼容旧数据，默认为有序
+                    ordered=r.get("ordered", True),  # 兼容旧数据，默认为有序
+                    cmodule=r.get("cmodule", "")
                 ))
             order_groups = []
             for g in mapping_data.get("order_groups", []):

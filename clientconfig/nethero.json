@@ -4,84 +4,27 @@
   "c2s_mappings": {
     "C2SUpdateHeroName": {
       "description": "更新英雄名称",
-      "order_groups": [
-        {
-          "name": "A",
-          "description": "这两个包的返回顺序不确定，取决于服务器处理逻辑"
-        }
-      ],
+      "order_groups": [],
       "responses": [
         {
-          "protocol": "S2CUpdateHero",
+          "protocol": "S2CAddHero",
           "order": 1,
           "type": "必然回包",
-          "condition": "你好，你是谁",
+          "condition": "",
           "count": "一次",
-          "order_group": "A"
+          "order_group": "",
+          "ordered": true,
+          "cmodule": "netfile.nethero"
         },
         {
-          "protocol": "S2CAddHero",
+          "protocol": "S2CUpdateHero",
           "order": 0,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": "A"
-        },
-        {
-          "protocol": "S2CAddMapHero",
-          "order": 2,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CAddHero",
-          "order": 3,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CDelMapHero",
-          "order": 4,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CDelMapHero",
-          "order": 5,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CDelMapHero",
-          "order": 6,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CDelMapHero",
-          "order": 7,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
-        },
-        {
-          "protocol": "S2CAddMapHero",
-          "order": 8,
-          "type": "必然回包",
-          "condition": "",
-          "count": "一次",
-          "order_group": ""
+          "type": "按条件回包",
+          "condition": "因为什么原因多次回包",
+          "count": "多次",
+          "order_group": "",
+          "ordered": false,
+          "cmodule": "netfile.nethero"
         }
       ]
     }

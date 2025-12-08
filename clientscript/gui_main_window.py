@@ -284,10 +284,12 @@ ConditionDialog = ResponseEditDialog
 class SettingsDialog(tk.Toplevel):
     """设置目录对话框"""
 
-    def __init__(self, parent, proto_dir: str, config_dir: str):
+    def __init__(self, parent, proto_dir: str, config_dir: str, root_dir: str):
         super().__init__(parent)
-        self.proto_dir = proto_dir
-        self.config_dir = config_dir
+        self.root_dir = root_dir
+        # 显示相对路径
+        self.proto_dir = self._to_relative_path(proto_dir)
+        self.config_dir = self._to_relative_path(config_dir)
         self.result = None
 
         self.title("设置目录")
@@ -298,6 +300,23 @@ class SettingsDialog(tk.Toplevel):
 
         self._create_widgets()
         self._center_window()
+
+    def _to_relative_path(self, path: str) -> str:
+        """将绝对路径转换为相对路径"""
+        if not path:
+            return path
+        try:
+            return os.path.relpath(path, self.root_dir)
+        except ValueError:
+            return path
+
+    def _to_absolute_path(self, path: str) -> str:
+        """将相对路径转换为绝对路径"""
+        if not path:
+            return path
+        if os.path.isabs(path):
+            return path
+        return os.path.normpath(os.path.join(self.root_dir, path))
 
     def _create_widgets(self):
         frame = ttk.Frame(self, padding=15)
@@ -326,14 +345,20 @@ class SettingsDialog(tk.Toplevel):
         ttk.Button(btn_frame, text="取消", command=self._on_cancel, width=10).pack(side=tk.LEFT, padx=10)
 
     def _browse_proto(self):
-        path = filedialog.askdirectory(title="选择Proto目录", initialdir=self.proto_var.get())
+        # 浏览时使用绝对路径
+        init_dir = self._to_absolute_path(self.proto_var.get())
+        path = filedialog.askdirectory(title="选择Proto目录", initialdir=init_dir)
         if path:
-            self.proto_var.set(path)
+            # 转换为相对路径显示
+            self.proto_var.set(self._to_relative_path(path))
 
     def _browse_config(self):
-        path = filedialog.askdirectory(title="选择配置输出目录", initialdir=self.config_var.get())
+        # 浏览时使用绝对路径
+        init_dir = self._to_absolute_path(self.config_var.get())
+        path = filedialog.askdirectory(title="选择配置输出目录", initialdir=init_dir)
         if path:
-            self.config_var.set(path)
+            # 转换为相对路径显示
+            self.config_var.set(self._to_relative_path(path))
 
     def _center_window(self):
         self.update_idletasks()
@@ -344,24 +369,28 @@ class SettingsDialog(tk.Toplevel):
     def _on_ok(self):
         proto = self.proto_var.get().strip()
         config = self.config_var.get().strip()
-        if not proto or not os.path.isdir(proto):
+        # 转换为绝对路径进行验证
+        abs_proto = self._to_absolute_path(proto)
+        abs_config = self._to_absolute_path(config)
+        if not proto or not os.path.isdir(abs_proto):
             messagebox.showerror("错误", "Proto目录不存在")
             return
         if not config:
             messagebox.showerror("错误", "请设置配置输出目录")
             return
         # 如果配置目录不存在，提示创建
-        if not os.path.exists(config):
-            if messagebox.askyesno("提示", f"目录不存在:\n{config}\n\n是否创建?"):
+        if not os.path.exists(abs_config):
+            if messagebox.askyesno("提示", f"目录不存在:\n{abs_config}\n\n是否创建?"):
                 try:
-                    os.makedirs(config)
+                    os.makedirs(abs_config)
                 except Exception as e:
                     messagebox.showerror("错误", f"创建目录失败: {e}")
                     return
             else:
                 return
 
-        self.result = {"proto_dir": proto, "config_dir": config}
+        # 返回绝对路径供主窗口使用
+        self.result = {"proto_dir": abs_proto, "config_dir": abs_config}
         self.destroy()
 
     def _on_cancel(self):
@@ -424,21 +453,45 @@ class MainWindow(tk.Tk):
         # 关闭窗口时检查保存
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
+    def _to_relative_path(self, path: str) -> str:
+        """将绝对路径转换为相对路径（相对于root_dir）"""
+        if not path:
+            return path
+        try:
+            return os.path.relpath(path, self.root_dir)
+        except ValueError:
+            # 不同驱动器无法转换为相对路径，保留绝对路径
+            return path
+
+    def _to_absolute_path(self, path: str) -> str:
+        """将相对路径转换为绝对路径（相对于root_dir）"""
+        if not path:
+            return path
+        if os.path.isabs(path):
+            return path
+        return os.path.normpath(os.path.join(self.root_dir, path))
+
     def _load_settings(self) -> dict:
         """加载本地设置"""
         if os.path.exists(self.settings_file):
             try:
                 with open(self.settings_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    settings = json.load(f)
+                # 将相对路径转换为绝对路径
+                if 'proto_dir' in settings:
+                    settings['proto_dir'] = self._to_absolute_path(settings['proto_dir'])
+                if 'config_dir' in settings:
+                    settings['config_dir'] = self._to_absolute_path(settings['config_dir'])
+                return settings
             except Exception:
                 pass
         return {}
 
     def _save_settings(self):
-        """保存设置到本地"""
+        """保存设置到本地（使用相对路径）"""
         settings = {
-            'proto_dir': self.proto_dir,
-            'config_dir': self.config_dir
+            'proto_dir': self._to_relative_path(self.proto_dir),
+            'config_dir': self._to_relative_path(self.config_dir)
         }
         try:
             with open(self.settings_file, 'w', encoding='utf-8') as f:
@@ -1050,9 +1103,11 @@ class MainWindow(tk.Tk):
             return
 
         s2c = self.current_s2c_dnet.s2c_list[s2c_index]
-        self._add_response(s2c.name)
+        # 获取 cmodule
+        cmodule = self.current_s2c_dnet.c2s_module if self.current_s2c_dnet else ""
+        self._add_response(s2c.name, cmodule)
 
-    def _add_response(self, protocol_name: str):
+    def _add_response(self, protocol_name: str, cmodule: str = ""):
         """添加S2C响应"""
         if not self.current_c2s or not self.current_config:
             return
@@ -1073,7 +1128,8 @@ class MainWindow(tk.Tk):
             order=new_order,
             type="必然回包",
             condition="",
-            ordered=True  # 默认有序
+            ordered=True,  # 默认有序
+            cmodule=cmodule
         )
         mapping.responses.append(response)
 
@@ -1391,7 +1447,7 @@ class MainWindow(tk.Tk):
 
     def _show_settings(self):
         """显示设置目录对话框"""
-        dialog = SettingsDialog(self, self.proto_dir, self.config_dir)
+        dialog = SettingsDialog(self, self.proto_dir, self.config_dir, self.root_dir)
         self.wait_window(dialog)
 
         if dialog.result:

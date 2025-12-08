@@ -1,16 +1,18 @@
-#DNET
-C2SMODULE:netfile.netmap.py
-S2CMODULE:netmap.py
+VERSION:1.0.0
 DESC:地图协议
+CMODULE:netfile.netmap
+SMODULE:netmap
 
-S2C.0xd2.
-	1.S2CAddMapHero.地图添加英雄
-		iMapID.4b.地图ID
-		iHeroID.4b.英雄ID
-	2.S2CDelMapHero.地图删除英雄
-		iMapID.4b.地图ID
-		iHeroID.4b.英雄ID
+GS2C:0xd2:
+	1:S2CAddMap:地图添加英雄
+		iMapID,4,地图ID
+		iHeroID,4,英雄ID
+	2:S2CUpdateHero:更新英雄信息
+		iMapID,4,地图ID
+		iHeroID,4,英雄ID
+		sHeroName,2p,英雄名字
 
-C2S.0xd1.
-	1.C2SSwitch.切换地图
-		iMapID.4b.地图ID
+C2GS:0xd2:
+	1:C2SUpdateHeroName:更新英雄名称
+		iHeroID,4,英雄ID
+		iNewName,2p,新的英雄名称

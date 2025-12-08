@@ -1,20 +1,21 @@
-#DNET
-C2SMODULE：netfile.nethero.py
-S2CMODULE:nethero.py
+VERSION:1.0.0
 DESC:英雄相关协议
+CMODULE:netfile.nethero
+SMODULE:netheroxx
 
+GS2C:0xd1:0x1:
+	1:S2CAddHero:添加英雄
+		iHeroID,4,英雄ID
+		sHeroName,2ps,英雄名称
+	2:S2CUpdateHero:更新英雄信息
+		iHeroID,4,英雄ID
+		sHeroName,2ps,英雄名称
+		forlist characterList:
+			iCharID,2,个性ID
 
-S2C.0xd1.
-	1.S2CAddHero.添加英雄
-		iHeroID.4b.英雄ID
-		sHeroName.2ps.英雄名称
-	2.S2CUpdateHero.更新英雄信息
-		iHeroID.4b.英雄ID
-		sHeroName.2ps.英雄名称
-
-C2S.0xd1.
-	1.C2SUpdateHeroName.更新英雄名称
-		iHeroID.4b.英雄ID
-		iNewName.2ps.新的英雄名称
+C2GS:0xd1:
+	1:C2SUpdateHeroName:更新英雄名称
+		iHeroID,4,英雄ID
+		iNewName,2p,新的英雄名称
 
 	
