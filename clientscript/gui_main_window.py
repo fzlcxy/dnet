@@ -665,6 +665,15 @@ class MainWindow(tk.Tk):
         select_paned.add(s2c_dnet_frame, weight=35)
 
         ttk.Label(s2c_dnet_frame, text="包含S2C的dnet文件").pack(anchor=tk.W)
+
+        # S2C dnet文件筛选栏
+        s2c_dnet_filter_row = ttk.Frame(s2c_dnet_frame)
+        s2c_dnet_filter_row.pack(fill=tk.X, pady=(0, 3))
+        self.s2c_dnet_filter_var = tk.StringVar()
+        self.s2c_dnet_filter_var.trace("w", lambda *args: self._filter_s2c_dnet_files())
+        s2c_dnet_filter_entry = ttk.Entry(s2c_dnet_filter_row, textvariable=self.s2c_dnet_filter_var)
+        s2c_dnet_filter_entry.pack(fill=tk.X, expand=True)
+
         self.s2c_dnet_list = tk.Listbox(s2c_dnet_frame, selectmode=tk.SINGLE)
         s2c_dnet_scroll = ttk.Scrollbar(s2c_dnet_frame, orient=tk.VERTICAL, command=self.s2c_dnet_list.yview)
         self.s2c_dnet_list.configure(yscrollcommand=s2c_dnet_scroll.set)
@@ -677,6 +686,15 @@ class MainWindow(tk.Tk):
         select_paned.add(s2c_list_frame, weight=65)
 
         ttk.Label(s2c_list_frame, text="S2C协议列表").pack(anchor=tk.W)
+
+        # S2C协议筛选栏
+        s2c_filter_row = ttk.Frame(s2c_list_frame)
+        s2c_filter_row.pack(fill=tk.X, pady=(0, 3))
+        self.s2c_filter_var = tk.StringVar()
+        self.s2c_filter_var.trace("w", lambda *args: self._filter_s2c_list())
+        s2c_filter_entry = ttk.Entry(s2c_filter_row, textvariable=self.s2c_filter_var)
+        s2c_filter_entry.pack(fill=tk.X, expand=True)
+
         self.s2c_list = tk.Listbox(s2c_list_frame, selectmode=tk.SINGLE)
         s2c_scroll = ttk.Scrollbar(s2c_list_frame, orient=tk.VERTICAL, command=self.s2c_list.yview)
         self.s2c_list.configure(yscrollcommand=s2c_scroll.set)
@@ -858,9 +876,26 @@ class MainWindow(tk.Tk):
     def _populate_s2c_dnet_list(self):
         """填充包含S2C的dnet文件列表"""
         self.s2c_dnet_list.delete(0, tk.END)
+        filter_text = self.s2c_dnet_filter_var.get().lower()
         for dnet in self.dnet_files:
             if dnet.has_s2c():
-                self.s2c_dnet_list.insert(tk.END, f"{dnet.relative_path} - {dnet.description}")
+                display_text = f"{dnet.relative_path} - {dnet.description}"
+                if filter_text and filter_text not in display_text.lower():
+                    continue
+                self.s2c_dnet_list.insert(tk.END, display_text)
+
+    def _filter_s2c_dnet_files(self):
+        """筛选S2C dnet文件列表"""
+        self._populate_s2c_dnet_list()
+        # 清空S2C协议列表
+        self.s2c_list.delete(0, tk.END)
+        self.current_s2c_dnet = None
+
+    def _filter_s2c_list(self):
+        """筛选S2C协议列表"""
+        if not self.current_s2c_dnet:
+            return
+        self._populate_s2c_list(self.current_s2c_dnet)
 
     def _filter_dnet_files(self):
         """过滤dnet文件列表"""
@@ -1057,8 +1092,12 @@ class MainWindow(tk.Tk):
     def _populate_s2c_list(self, dnet: DnetFile):
         """填充S2C协议列表"""
         self.s2c_list.delete(0, tk.END)
+        filter_text = self.s2c_filter_var.get().lower()
         for s2c in dnet.s2c_list:
-            self.s2c_list.insert(tk.END, f"{s2c.name} - {s2c.description}")
+            display_text = f"{s2c.name} - {s2c.description}"
+            if filter_text and filter_text not in display_text.lower():
+                continue
+            self.s2c_list.insert(tk.END, display_text)
 
     def _on_s2c_selected(self, event):
         """选择S2C协议时"""
