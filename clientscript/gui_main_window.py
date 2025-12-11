@@ -521,7 +521,7 @@ class MainWindow(tk.Tk):
         # 配置Treeview样式
         style.configure("Treeview",
                         font=("Microsoft YaHei UI", 10),
-                        rowheight=26)
+                        rowheight=20)
         style.configure("Treeview.Heading",
                         font=("Microsoft YaHei UI", 10, "bold"))
 
@@ -1082,8 +1082,16 @@ class MainWindow(tk.Tk):
             return
 
         index = selection[0]
-        # 找到对应的dnet文件
-        s2c_dnet_files = [d for d in self.dnet_files if d.has_s2c()]
+        # 找到对应的dnet文件（应用相同的筛选条件）
+        filter_text = self.s2c_dnet_filter_var.get().lower()
+        s2c_dnet_files = []
+        for d in self.dnet_files:
+            if d.has_s2c():
+                display_text = f"{d.relative_path} - {d.description}"
+                if filter_text and filter_text not in display_text.lower():
+                    continue
+                s2c_dnet_files.append(d)
+
         if index < len(s2c_dnet_files):
             dnet = s2c_dnet_files[index]
             self.current_s2c_dnet = dnet  # 保存当前选中的S2C dnet
@@ -1093,10 +1101,13 @@ class MainWindow(tk.Tk):
         """填充S2C协议列表"""
         self.s2c_list.delete(0, tk.END)
         filter_text = self.s2c_filter_var.get().lower()
+        # 保存筛选后的S2C列表
+        self._filtered_s2c_list = []
         for s2c in dnet.s2c_list:
             display_text = f"{s2c.name} - {s2c.description}"
             if filter_text and filter_text not in display_text.lower():
                 continue
+            self._filtered_s2c_list.append(s2c)
             self.s2c_list.insert(tk.END, display_text)
 
     def _on_s2c_selected(self, event):
@@ -1109,8 +1120,9 @@ class MainWindow(tk.Tk):
             return
 
         s2c_index = s2c_selection[0]
-        if s2c_index < len(self.current_s2c_dnet.s2c_list):
-            self._show_s2c_detail(self.current_s2c_dnet.s2c_list[s2c_index])
+        # 使用筛选后的列表
+        if hasattr(self, '_filtered_s2c_list') and s2c_index < len(self._filtered_s2c_list):
+            self._show_s2c_detail(self._filtered_s2c_list[s2c_index])
 
     def _show_s2c_detail(self, protocol: Protocol):
         """显示S2C协议详情"""
@@ -1138,10 +1150,11 @@ class MainWindow(tk.Tk):
 
         # 通过双击位置获取选中项
         s2c_index = self.s2c_list.nearest(event.y)
-        if s2c_index < 0 or s2c_index >= len(self.current_s2c_dnet.s2c_list):
+        # 使用筛选后的列表
+        if not hasattr(self, '_filtered_s2c_list') or s2c_index < 0 or s2c_index >= len(self._filtered_s2c_list):
             return
 
-        s2c = self.current_s2c_dnet.s2c_list[s2c_index]
+        s2c = self._filtered_s2c_list[s2c_index]
         # 获取 cmodule
         cmodule = self.current_s2c_dnet.c2s_module if self.current_s2c_dnet else ""
         self._add_response(s2c.name, cmodule)
