@@ -1,0 +1,32 @@
+{
+  "dnet_file": "netmap.dnet",
+  "description": "地图协议",
+  "c2s_mappings": {
+    "C2SUpdateHeroName": {
+      "description": "更新英雄名称",
+      "order_groups": [],
+      "responses": [
+        {
+          "protocol": "S2CAddHero",
+          "order": 1,
+          "type": "必然回包",
+          "condition": "",
+          "count": "一次",
+          "order_group": "",
+          "ordered": true,
+          "cmodule": "netfile.nethero"
+        },
+        {
+          "protocol": "S2CUpdateHero",
+          "order": 2,
+          "type": "必然回包",
+          "condition": "",
+          "count": "一次",
+          "order_group": "",
+          "ordered": true,
+          "cmodule": "netfile.nethero"
+        }
+      ]
+    }
+  }
+}

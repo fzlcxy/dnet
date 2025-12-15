@@ -19,7 +19,7 @@ def get_base_path():
         return os.path.dirname(os.path.abspath(__file__))
 
 from dnet_parser import DnetParser, DnetFile, Protocol
-from config_manager import ConfigManager, C2SConfig, C2SMapping, S2CResponse, OrderGroup
+from config_manager import ConfigManager, C2SConfig, C2SMapping, S2CResponse, OrderGroup, S2CTrigger, S2CTriggerConfig
 
 
 class ToolTip:
@@ -167,6 +167,102 @@ class ResponseEditDialog(tk.Toplevel):
             "condition": self.condition_text.get("1.0", tk.END).strip(),
             "count": self.count_var.get(),
             "order_group": group_value,
+            "ordered": self.ordered_var.get()
+        }
+        self.destroy()
+
+    def _on_cancel(self):
+        self.destroy()
+
+
+class S2CTriggerEditDialog(tk.Toplevel):
+    """编辑S2C自定义触发条件对话框"""
+
+    def __init__(self, parent, trigger: Optional[S2CTrigger] = None):
+        super().__init__(parent)
+        self.trigger = trigger
+        self.result = None
+
+        self.title("编辑触发条件" if trigger else "添加触发条件")
+        self.geometry("450x350")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        self._create_widgets()
+        self._center_window()
+
+    def _create_widgets(self):
+        frame = ttk.Frame(self, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        row = 0
+        # 触发条件名称
+        ttk.Label(frame, text="触发条件名称:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.name_var = tk.StringVar(value=self.trigger.name if self.trigger else "")
+        name_entry = ttk.Entry(frame, textvariable=self.name_var, width=35)
+        name_entry.grid(row=row, column=1, sticky=tk.W, pady=5)
+        name_entry.focus()
+
+        row += 1
+        # 顺序状态
+        ttk.Label(frame, text="顺序状态:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        ordered_frame = ttk.Frame(frame)
+        ordered_frame.grid(row=row, column=1, sticky=tk.W, pady=5)
+        self.ordered_var = tk.BooleanVar(value=self.trigger.ordered if self.trigger else True)
+        ttk.Radiobutton(ordered_frame, text="有序", variable=self.ordered_var,
+                        value=True).pack(side=tk.LEFT)
+        ttk.Radiobutton(ordered_frame, text="无序", variable=self.ordered_var,
+                        value=False).pack(side=tk.LEFT, padx=10)
+
+        row += 1
+        # 响应类型
+        ttk.Label(frame, text="响应类型:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.type_var = tk.StringVar(value=self.trigger.type if self.trigger else "必然回包")
+        type_combo = ttk.Combobox(frame, textvariable=self.type_var,
+                                   values=["必然回包", "按条件回包"], state="readonly", width=15)
+        type_combo.grid(row=row, column=1, sticky=tk.W, pady=5)
+
+        row += 1
+        # 回包次数
+        ttk.Label(frame, text="回包次数:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        self.count_var = tk.StringVar(value=self.trigger.count if self.trigger else "一次")
+        count_combo = ttk.Combobox(frame, textvariable=self.count_var,
+                                    values=["一次", "多次"], state="readonly", width=15)
+        count_combo.grid(row=row, column=1, sticky=tk.W, pady=5)
+
+        row += 1
+        # 备注
+        ttk.Label(frame, text="备注:").grid(row=row, column=0, sticky=tk.NW, pady=5)
+        self.condition_text = tk.Text(frame, width=35, height=5)
+        self.condition_text.grid(row=row, column=1, sticky=tk.W, pady=5)
+        if self.trigger:
+            self.condition_text.insert("1.0", self.trigger.condition)
+
+        row += 1
+        # 按钮
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(row=row, column=0, columnspan=2, pady=10)
+        ttk.Button(btn_frame, text="确定", command=self._on_ok).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="取消", command=self._on_cancel).pack(side=tk.LEFT, padx=5)
+
+    def _center_window(self):
+        self.update_idletasks()
+        x = self.master.winfo_x() + (self.master.winfo_width() - self.winfo_width()) // 2
+        y = self.master.winfo_y() + (self.master.winfo_height() - self.winfo_height()) // 2
+        self.geometry(f"+{x}+{y}")
+
+    def _on_ok(self):
+        name = self.name_var.get().strip()
+        if not name:
+            messagebox.showwarning("提示", "请输入触发条件名称")
+            return
+
+        self.result = {
+            "name": name,
+            "type": self.type_var.get(),
+            "condition": self.condition_text.get("1.0", tk.END).strip(),
+            "count": self.count_var.get(),
             "ordered": self.ordered_var.get()
         }
         self.destroy()
@@ -584,19 +680,19 @@ class MainWindow(tk.Tk):
 
     def _setup_main_frame(self):
         """设置主界面"""
-        # 主分割面板
-        main_paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
-        main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        # 创建Notebook用于切换C2S和S2C模式
+        self.mode_notebook = ttk.Notebook(self)
+        self.mode_notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        # 左侧面板 (S2C选择部分)
-        left_frame = ttk.Frame(main_paned)
-        main_paned.add(left_frame, weight=35)
-        self._setup_left_panel(left_frame)
+        # C2S模式Tab
+        c2s_tab = ttk.Frame(self.mode_notebook)
+        self.mode_notebook.add(c2s_tab, text="C2S模式")
+        self._setup_c2s_mode(c2s_tab)
 
-        # 右侧面板 (C2S和配置部分)
-        right_frame = ttk.Frame(main_paned)
-        main_paned.add(right_frame, weight=65)
-        self._setup_right_panel(right_frame)
+        # S2C模式Tab
+        s2c_tab = ttk.Frame(self.mode_notebook)
+        self.mode_notebook.add(s2c_tab, text="S2C模式")
+        self._setup_s2c_mode(s2c_tab)
 
         # 状态栏
         status_frame = ttk.Frame(self)
@@ -618,6 +714,22 @@ class MainWindow(tk.Tk):
         stats_label = ttk.Label(status_frame, textvariable=self.stats_var,
                                 relief=tk.SUNKEN, width=20, anchor=tk.CENTER)
         stats_label.pack(side=tk.LEFT, padx=1)
+
+    def _setup_c2s_mode(self, parent):
+        """设置C2S模式面板"""
+        # 主分割面板
+        main_paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True)
+
+        # 左侧面板 (S2C选择部分)
+        left_frame = ttk.Frame(main_paned)
+        main_paned.add(left_frame, weight=35)
+        self._setup_left_panel(left_frame)
+
+        # 右侧面板 (C2S和配置部分)
+        right_frame = ttk.Frame(main_paned)
+        main_paned.add(right_frame, weight=65)
+        self._setup_right_panel(right_frame)
 
     def _setup_left_panel(self, parent):
         """设置左侧面板（C2S部分）"""
@@ -766,6 +878,8 @@ class MainWindow(tk.Tk):
         self.config_menu.add_command(label="编辑", command=self._edit_selected_response)
         self.config_menu.add_command(label="编辑顺序组说明...", command=self._edit_order_group)
         self.config_menu.add_separator()
+        self.config_menu.add_command(label="跳转S2C面板", command=self._jump_to_s2c_mode)
+        self.config_menu.add_separator()
         self.config_menu.add_command(label="删除", command=self._remove_response)
 
         # 底部：S2C详情面板（较小，与左侧对称）
@@ -806,6 +920,9 @@ class MainWindow(tk.Tk):
         self.dnet_files = self.parser.scan_directory(self.proto_dir)
         self._populate_dnet_tree()
         self._populate_s2c_dnet_list()
+        # 初始化S2C模式的dnet列表
+        if hasattr(self, 's2c_mode_dnet_list'):
+            self._populate_s2c_mode_dnet_list()
         self.status_var.set(f"已加载 {len(self.dnet_files)} 个dnet文件")
 
     def _has_config(self, dnet: DnetFile) -> bool:
@@ -1268,6 +1385,84 @@ class MainWindow(tk.Tk):
             self.config_tree.selection_set(item)
             self.config_menu.post(event.x_root, event.y_root)
 
+    def _jump_to_s2c_mode(self):
+        """跳转到S2C模式并选中对应的S2C协议"""
+        selection = self.config_tree.selection()
+        if not selection:
+            return
+
+        item = selection[0]
+        values = self.config_tree.item(item, "values")
+        if not values or len(values) < 2:
+            return
+
+        protocol_name = values[1]  # 协议名称在第二列
+
+        # 查找该S2C所属的dnet文件
+        target_dnet = None
+        target_s2c = None
+        for dnet in self.dnet_files:
+            for s2c in dnet.s2c_list:
+                if s2c.name == protocol_name:
+                    target_dnet = dnet
+                    target_s2c = s2c
+                    break
+            if target_dnet:
+                break
+
+        if not target_dnet or not target_s2c:
+            messagebox.showwarning("提示", f"未找到S2C协议: {protocol_name}")
+            return
+
+        # 切换到S2C模式Tab
+        self.mode_notebook.select(1)  # S2C模式是第二个Tab
+
+        # 在dnet文件列表中选中对应文件
+        filter_text = self.s2c_mode_dnet_filter_var.get().lower()
+        dnet_index = -1
+        idx = 0
+        for d in self.dnet_files:
+            if d.has_s2c():
+                display_text = f"{d.relative_path} - {d.description}"
+                if filter_text and filter_text not in display_text.lower():
+                    continue
+                if d.relative_path == target_dnet.relative_path:
+                    dnet_index = idx
+                    break
+                idx += 1
+
+        if dnet_index >= 0:
+            self.s2c_mode_dnet_list.selection_clear(0, tk.END)
+            self.s2c_mode_dnet_list.selection_set(dnet_index)
+            self.s2c_mode_dnet_list.see(dnet_index)
+
+            # 触发dnet选择事件
+            self.s2c_mode_current_dnet = target_dnet
+            self.s2c_mode_current_config = self.config_manager.load_config(target_dnet.relative_path)
+            if not self.s2c_mode_current_config:
+                self.s2c_mode_current_config = self.config_manager.create_empty_config(target_dnet)
+            self._populate_s2c_mode_protocol_list(target_dnet)
+
+            # 在S2C协议列表中选中对应协议
+            s2c_filter_text = self.s2c_mode_protocol_filter_var.get().lower()
+            s2c_index = -1
+            for i, s2c in enumerate(self.s2c_mode_filtered_s2c_list):
+                if s2c.name == target_s2c.name:
+                    s2c_index = i
+                    break
+
+            if s2c_index >= 0:
+                self.s2c_mode_protocol_list.selection_clear(0, tk.END)
+                self.s2c_mode_protocol_list.selection_set(s2c_index)
+                self.s2c_mode_protocol_list.see(s2c_index)
+
+                # 触发S2C选择事件
+                self.s2c_mode_current_s2c = target_s2c
+                self._show_s2c_mode_detail(target_s2c)
+                self._load_s2c_triggers(target_s2c.name)
+
+        self.status_var.set(f"已跳转到S2C: {protocol_name}")
+
     def _edit_selected_response(self):
         """编辑选中的响应"""
         selection = self.config_tree.selection()
@@ -1554,6 +1749,442 @@ class MainWindow(tk.Tk):
     def _show_about(self):
         """显示关于"""
         messagebox.showinfo("关于", "协议配置GUI工具\n版本 1.0\n\n用于配置C2S到S2C的响应映射关系")
+
+    # ==================== S2C模式相关方法 ====================
+
+    def _setup_s2c_mode(self, parent):
+        """设置S2C模式面板"""
+        # 主分割面板
+        main_paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True)
+
+        # 左侧面板 (S2C选择)
+        left_frame = ttk.Frame(main_paned)
+        main_paned.add(left_frame, weight=35)
+        self._setup_s2c_mode_left_panel(left_frame)
+
+        # 右侧面板 (触发关系和详情)
+        right_frame = ttk.Frame(main_paned)
+        main_paned.add(right_frame, weight=65)
+        self._setup_s2c_mode_right_panel(right_frame)
+
+    def _setup_s2c_mode_left_panel(self, parent):
+        """S2C模式左侧面板：S2C文件选择和C2S触发列表"""
+        # S2C dnet文件选择面板
+        dnet_frame = ttk.LabelFrame(parent, text="选择S2C协议文件", padding=5)
+        dnet_frame.pack(fill=tk.BOTH, padx=2, pady=2)
+
+        # 筛选栏
+        filter_row = ttk.Frame(dnet_frame)
+        filter_row.pack(fill=tk.X, pady=(0, 3))
+
+        self.s2c_mode_dnet_filter_var = tk.StringVar()
+        self.s2c_mode_dnet_filter_var.trace("w", lambda *args: self._filter_s2c_mode_dnet_files())
+        filter_entry = ttk.Entry(filter_row, textvariable=self.s2c_mode_dnet_filter_var)
+        filter_entry.pack(fill=tk.X, expand=True)
+
+        # dnet文件列表
+        self.s2c_mode_dnet_list = tk.Listbox(dnet_frame, selectmode=tk.SINGLE)
+        dnet_scroll = ttk.Scrollbar(dnet_frame, orient=tk.VERTICAL, command=self.s2c_mode_dnet_list.yview)
+        self.s2c_mode_dnet_list.configure(yscrollcommand=dnet_scroll.set)
+        self.s2c_mode_dnet_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        dnet_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.s2c_mode_dnet_list.bind("<<ListboxSelect>>", self._on_s2c_mode_dnet_selected)
+
+        # C2S触发列表（只读）- 移到左侧
+        c2s_trigger_frame = ttk.LabelFrame(parent, text="C2S触发列表（只读，需在C2S模式下修改）", padding=5)
+        c2s_trigger_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        columns = ("c2s_name", "dnet_file", "type", "count", "condition")
+        self.s2c_mode_c2s_trigger_tree = ttk.Treeview(c2s_trigger_frame, columns=columns, show="headings", height=8)
+        self.s2c_mode_c2s_trigger_tree.heading("c2s_name", text="C2S协议")
+        self.s2c_mode_c2s_trigger_tree.heading("dnet_file", text="所属文件")
+        self.s2c_mode_c2s_trigger_tree.heading("type", text="类型")
+        self.s2c_mode_c2s_trigger_tree.heading("count", text="次数")
+        self.s2c_mode_c2s_trigger_tree.heading("condition", text="备注")
+        self.s2c_mode_c2s_trigger_tree.column("c2s_name", width=120)
+        self.s2c_mode_c2s_trigger_tree.column("dnet_file", width=120)
+        self.s2c_mode_c2s_trigger_tree.column("type", width=70)
+        self.s2c_mode_c2s_trigger_tree.column("count", width=40)
+        self.s2c_mode_c2s_trigger_tree.column("condition", width=100)
+
+        c2s_scroll = ttk.Scrollbar(c2s_trigger_frame, orient=tk.VERTICAL, command=self.s2c_mode_c2s_trigger_tree.yview)
+        self.s2c_mode_c2s_trigger_tree.configure(yscrollcommand=c2s_scroll.set)
+        self.s2c_mode_c2s_trigger_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        c2s_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.s2c_mode_c2s_trigger_tree.bind("<<TreeviewSelect>>", self._on_s2c_mode_c2s_trigger_selected)
+
+        # 触发项详情面板（C2S详情）
+        trigger_detail_frame = ttk.LabelFrame(parent, text="C2S详情", padding=5)
+        trigger_detail_frame.pack(fill=tk.X, padx=2, pady=2)
+
+        self.s2c_mode_trigger_detail_text = tk.Text(trigger_detail_frame, height=6, state=tk.DISABLED,
+                                                    font=("Microsoft YaHei UI", 9))
+        trigger_detail_scroll = ttk.Scrollbar(trigger_detail_frame, orient=tk.VERTICAL,
+                                              command=self.s2c_mode_trigger_detail_text.yview)
+        self.s2c_mode_trigger_detail_text.configure(yscrollcommand=trigger_detail_scroll.set)
+        self.s2c_mode_trigger_detail_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        trigger_detail_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 初始化S2C模式的状态变量
+        self.s2c_mode_current_dnet: Optional[DnetFile] = None
+        self.s2c_mode_current_s2c: Optional[Protocol] = None
+        self.s2c_mode_filtered_s2c_list: List[Protocol] = []
+
+    def _setup_s2c_mode_right_panel(self, parent):
+        """S2C模式右侧面板：S2C协议列表和自定义触发条件"""
+        # S2C协议选择面板 - 移到右侧顶部
+        s2c_frame = ttk.LabelFrame(parent, text="S2C协议列表", padding=5, style="Primary.TLabelframe")
+        s2c_frame.pack(fill=tk.BOTH, padx=2, pady=2)
+
+        # 筛选栏
+        s2c_filter_row = ttk.Frame(s2c_frame)
+        s2c_filter_row.pack(fill=tk.X, pady=(0, 3))
+
+        self.s2c_mode_protocol_filter_var = tk.StringVar()
+        self.s2c_mode_protocol_filter_var.trace("w", lambda *args: self._filter_s2c_mode_protocol_list())
+        s2c_filter_entry = ttk.Entry(s2c_filter_row, textvariable=self.s2c_mode_protocol_filter_var)
+        s2c_filter_entry.pack(fill=tk.X, expand=True)
+
+        # S2C协议列表
+        self.s2c_mode_protocol_list = tk.Listbox(s2c_frame, selectmode=tk.SINGLE, font=("Microsoft YaHei UI", 10), height=10)
+        s2c_scroll = ttk.Scrollbar(s2c_frame, orient=tk.VERTICAL, command=self.s2c_mode_protocol_list.yview)
+        self.s2c_mode_protocol_list.configure(yscrollcommand=s2c_scroll.set)
+        self.s2c_mode_protocol_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        s2c_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.s2c_mode_protocol_list.bind("<<ListboxSelect>>", self._on_s2c_mode_protocol_selected)
+
+        # 自定义触发条件面板
+        custom_trigger_frame = ttk.LabelFrame(parent, text="自定义触发条件（双击编辑）", padding=5, style="Primary.TLabelframe")
+        custom_trigger_frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
+
+        # 按钮栏
+        btn_row = ttk.Frame(custom_trigger_frame)
+        btn_row.pack(fill=tk.X, pady=(0, 3))
+        ttk.Button(btn_row, text="添加", command=self._add_s2c_custom_trigger).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_row, text="删除", command=self._remove_s2c_custom_trigger).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_row, text="保存", command=self._save_s2c_triggers).pack(side=tk.RIGHT, padx=2)
+
+        columns = ("name", "type", "count", "ordered", "condition")
+        self.s2c_mode_custom_trigger_tree = ttk.Treeview(custom_trigger_frame, columns=columns, show="headings", height=6)
+        self.s2c_mode_custom_trigger_tree.heading("name", text="触发条件名称")
+        self.s2c_mode_custom_trigger_tree.heading("type", text="类型")
+        self.s2c_mode_custom_trigger_tree.heading("count", text="次数")
+        self.s2c_mode_custom_trigger_tree.heading("ordered", text="顺序")
+        self.s2c_mode_custom_trigger_tree.heading("condition", text="备注")
+        self.s2c_mode_custom_trigger_tree.column("name", width=180)
+        self.s2c_mode_custom_trigger_tree.column("type", width=80)
+        self.s2c_mode_custom_trigger_tree.column("count", width=50)
+        self.s2c_mode_custom_trigger_tree.column("ordered", width=50)
+        self.s2c_mode_custom_trigger_tree.column("condition", width=150)
+
+        custom_scroll = ttk.Scrollbar(custom_trigger_frame, orient=tk.VERTICAL, command=self.s2c_mode_custom_trigger_tree.yview)
+        self.s2c_mode_custom_trigger_tree.configure(yscrollcommand=custom_scroll.set)
+        self.s2c_mode_custom_trigger_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        custom_scroll.pack(side=tk.LEFT, fill=tk.Y)
+        self.s2c_mode_custom_trigger_tree.bind("<Double-1>", self._on_s2c_mode_custom_trigger_double_click)
+
+        # S2C详情面板
+        s2c_detail_frame = ttk.LabelFrame(parent, text="S2C详情", padding=5)
+        s2c_detail_frame.pack(fill=tk.X, padx=2, pady=2)
+
+        self.s2c_mode_detail_text = tk.Text(s2c_detail_frame, height=6, state=tk.DISABLED,
+                                            font=("Microsoft YaHei UI", 9))
+        s2c_detail_scroll = ttk.Scrollbar(s2c_detail_frame, orient=tk.VERTICAL,
+                                          command=self.s2c_mode_detail_text.yview)
+        self.s2c_mode_detail_text.configure(yscrollcommand=s2c_detail_scroll.set)
+        self.s2c_mode_detail_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        s2c_detail_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # S2C模式的当前配置
+        self.s2c_mode_current_config: Optional[C2SConfig] = None
+        self.s2c_mode_triggers_modified = False
+
+    def _populate_s2c_mode_dnet_list(self):
+        """填充S2C模式的dnet文件列表"""
+        self.s2c_mode_dnet_list.delete(0, tk.END)
+        filter_text = self.s2c_mode_dnet_filter_var.get().lower()
+        for dnet in self.dnet_files:
+            if dnet.has_s2c():
+                display_text = f"{dnet.relative_path} - {dnet.description}"
+                if filter_text and filter_text not in display_text.lower():
+                    continue
+                self.s2c_mode_dnet_list.insert(tk.END, display_text)
+
+    def _filter_s2c_mode_dnet_files(self):
+        """筛选S2C模式的dnet文件列表"""
+        self._populate_s2c_mode_dnet_list()
+        self.s2c_mode_protocol_list.delete(0, tk.END)
+        self.s2c_mode_current_dnet = None
+        self.s2c_mode_current_s2c = None
+        self._clear_s2c_mode_triggers()
+
+    def _filter_s2c_mode_protocol_list(self):
+        """筛选S2C模式的协议列表"""
+        if not self.s2c_mode_current_dnet:
+            return
+        self._populate_s2c_mode_protocol_list(self.s2c_mode_current_dnet)
+
+    def _on_s2c_mode_dnet_selected(self, event):
+        """S2C模式：选择dnet文件"""
+        selection = self.s2c_mode_dnet_list.curselection()
+        if not selection:
+            return
+
+        # 检查是否需要保存
+        if self.s2c_mode_triggers_modified:
+            if messagebox.askyesno("保存", "当前触发条件已修改，是否保存？"):
+                self._save_s2c_triggers()
+
+        index = selection[0]
+        filter_text = self.s2c_mode_dnet_filter_var.get().lower()
+        s2c_dnet_files = []
+        for d in self.dnet_files:
+            if d.has_s2c():
+                display_text = f"{d.relative_path} - {d.description}"
+                if filter_text and filter_text not in display_text.lower():
+                    continue
+                s2c_dnet_files.append(d)
+
+        if index < len(s2c_dnet_files):
+            dnet = s2c_dnet_files[index]
+            self.s2c_mode_current_dnet = dnet
+            self.s2c_mode_current_s2c = None
+            # 加载该dnet文件的配置
+            self.s2c_mode_current_config = self.config_manager.load_config(dnet.relative_path)
+            if not self.s2c_mode_current_config:
+                self.s2c_mode_current_config = self.config_manager.create_empty_config(dnet)
+            self._populate_s2c_mode_protocol_list(dnet)
+            self._clear_s2c_mode_triggers()
+
+    def _populate_s2c_mode_protocol_list(self, dnet: DnetFile):
+        """填充S2C模式的协议列表"""
+        self.s2c_mode_protocol_list.delete(0, tk.END)
+        filter_text = self.s2c_mode_protocol_filter_var.get().lower()
+        self.s2c_mode_filtered_s2c_list = []
+        for s2c in dnet.s2c_list:
+            display_text = f"{s2c.name} - {s2c.description}"
+            if filter_text and filter_text not in display_text.lower():
+                continue
+            self.s2c_mode_filtered_s2c_list.append(s2c)
+            self.s2c_mode_protocol_list.insert(tk.END, display_text)
+
+    def _on_s2c_mode_protocol_selected(self, event):
+        """S2C模式：选择S2C协议"""
+        selection = self.s2c_mode_protocol_list.curselection()
+        if not selection or not self.s2c_mode_current_dnet:
+            return
+
+        # 检查是否需要保存
+        if self.s2c_mode_triggers_modified:
+            if messagebox.askyesno("保存", "当前触发条件已修改，是否保存？"):
+                self._save_s2c_triggers()
+
+        index = selection[0]
+        if index < len(self.s2c_mode_filtered_s2c_list):
+            s2c = self.s2c_mode_filtered_s2c_list[index]
+            self.s2c_mode_current_s2c = s2c
+            self._show_s2c_mode_detail(s2c)
+            self._load_s2c_triggers(s2c.name)
+
+    def _show_s2c_mode_detail(self, protocol: Protocol):
+        """显示S2C模式的协议详情"""
+        self.s2c_mode_detail_text.config(state=tk.NORMAL)
+        self.s2c_mode_detail_text.delete("1.0", tk.END)
+
+        text = f"协议名称: {protocol.name}\n"
+        text += f"描述: {protocol.description}\n"
+        text += f"\n字段列表:\n"
+        for field in protocol.fields:
+            text += f"  - {field.name} ({field.type_info}): {field.description}\n"
+
+        self.s2c_mode_detail_text.insert("1.0", text)
+        self.s2c_mode_detail_text.config(state=tk.DISABLED)
+
+    def _clear_s2c_mode_triggers(self):
+        """清空S2C模式的触发列表"""
+        self.s2c_mode_c2s_trigger_tree.delete(*self.s2c_mode_c2s_trigger_tree.get_children())
+        self.s2c_mode_custom_trigger_tree.delete(*self.s2c_mode_custom_trigger_tree.get_children())
+        self.s2c_mode_trigger_detail_text.config(state=tk.NORMAL)
+        self.s2c_mode_trigger_detail_text.delete("1.0", tk.END)
+        self.s2c_mode_trigger_detail_text.config(state=tk.DISABLED)
+        self.s2c_mode_triggers_modified = False
+
+    def _load_s2c_triggers(self, s2c_name: str):
+        """加载指定S2C的触发关系"""
+        self._clear_s2c_mode_triggers()
+
+        # 1. 遍历所有配置，找出触发该S2C的C2S
+        c2s_triggers = self._find_c2s_triggers_for_s2c(s2c_name)
+        for trigger in c2s_triggers:
+            self.s2c_mode_c2s_trigger_tree.insert("", tk.END, values=(
+                trigger["c2s_name"],
+                trigger["dnet_file"],
+                trigger["type"],
+                trigger["count"],
+                trigger["condition"]
+            ))
+
+        # 2. 加载自定义触发条件
+        if self.s2c_mode_current_config and s2c_name in self.s2c_mode_current_config.s2c_triggers:
+            trigger_config = self.s2c_mode_current_config.s2c_triggers[s2c_name]
+            for t in trigger_config.custom_triggers:
+                ordered_text = "有序" if t.ordered else "无序"
+                self.s2c_mode_custom_trigger_tree.insert("", tk.END, values=(
+                    t.name, t.type, t.count, ordered_text, t.condition
+                ))
+
+    def _find_c2s_triggers_for_s2c(self, s2c_name: str) -> List[dict]:
+        """遍历所有C2S配置，找出触发指定S2C的C2S"""
+        triggers = []
+        for dnet in self.dnet_files:
+            config = self.config_manager.load_config(dnet.relative_path)
+            if not config:
+                continue
+            for c2s_name, mapping in config.c2s_mappings.items():
+                for resp in mapping.responses:
+                    if resp.protocol == s2c_name:
+                        triggers.append({
+                            "c2s_name": c2s_name,
+                            "dnet_file": dnet.relative_path,
+                            "type": resp.type,
+                            "count": resp.count,
+                            "condition": resp.condition
+                        })
+        return triggers
+
+    def _on_s2c_mode_c2s_trigger_selected(self, event):
+        """S2C模式：选中C2S触发项，显示详情"""
+        selection = self.s2c_mode_c2s_trigger_tree.selection()
+        if not selection:
+            return
+
+        item = selection[0]
+        values = self.s2c_mode_c2s_trigger_tree.item(item, "values")
+        if not values:
+            return
+
+        c2s_name = values[0]
+        dnet_file = values[1]
+
+        # 查找C2S协议详情
+        for dnet in self.dnet_files:
+            if dnet.relative_path == dnet_file:
+                for c2s in dnet.c2s_list:
+                    if c2s.name == c2s_name:
+                        self._show_s2c_mode_trigger_detail_c2s(c2s, dnet_file)
+                        return
+
+    def _show_s2c_mode_trigger_detail_c2s(self, c2s: Protocol, dnet_file: str):
+        """显示C2S触发项的详情"""
+        self.s2c_mode_trigger_detail_text.config(state=tk.NORMAL)
+        self.s2c_mode_trigger_detail_text.delete("1.0", tk.END)
+
+        text = f"[C2S触发] {c2s.name}\n"
+        text += f"所属文件: {dnet_file}\n"
+        text += f"描述: {c2s.description}\n"
+        text += f"\n字段列表:\n"
+        for field in c2s.fields:
+            text += f"  - {field.name} ({field.type_info}): {field.description}\n"
+
+        self.s2c_mode_trigger_detail_text.insert("1.0", text)
+        self.s2c_mode_trigger_detail_text.config(state=tk.DISABLED)
+
+    def _add_s2c_custom_trigger(self):
+        """添加自定义触发条件"""
+        if not self.s2c_mode_current_s2c or not self.s2c_mode_current_config:
+            messagebox.showwarning("提示", "请先选择一个S2C协议")
+            return
+
+        dialog = S2CTriggerEditDialog(self, None)
+        self.wait_window(dialog)
+
+        if dialog.result:
+            s2c_name = self.s2c_mode_current_s2c.name
+            if s2c_name not in self.s2c_mode_current_config.s2c_triggers:
+                self.s2c_mode_current_config.s2c_triggers[s2c_name] = S2CTriggerConfig()
+
+            trigger = S2CTrigger(
+                name=dialog.result["name"],
+                type=dialog.result["type"],
+                condition=dialog.result["condition"],
+                count=dialog.result["count"],
+                ordered=dialog.result["ordered"]
+            )
+            self.s2c_mode_current_config.s2c_triggers[s2c_name].custom_triggers.append(trigger)
+
+            # 刷新列表
+            self._load_s2c_triggers(s2c_name)
+            self.s2c_mode_triggers_modified = True
+            self.status_var.set(f"已添加触发条件: {trigger.name}")
+
+    def _remove_s2c_custom_trigger(self):
+        """删除自定义触发条件"""
+        selection = self.s2c_mode_custom_trigger_tree.selection()
+        if not selection:
+            messagebox.showwarning("提示", "请先选择要删除的触发条件")
+            return
+
+        if not messagebox.askyesno("确认", "确定要删除选中的触发条件吗？"):
+            return
+
+        if not self.s2c_mode_current_s2c or not self.s2c_mode_current_config:
+            return
+
+        item = selection[0]
+        index = self.s2c_mode_custom_trigger_tree.index(item)
+        s2c_name = self.s2c_mode_current_s2c.name
+
+        if s2c_name in self.s2c_mode_current_config.s2c_triggers:
+            triggers = self.s2c_mode_current_config.s2c_triggers[s2c_name].custom_triggers
+            if index < len(triggers):
+                del triggers[index]
+                self._load_s2c_triggers(s2c_name)
+                self.s2c_mode_triggers_modified = True
+                self.status_var.set("已删除触发条件")
+
+    def _on_s2c_mode_custom_trigger_double_click(self, event):
+        """双击编辑自定义触发条件"""
+        item = self.s2c_mode_custom_trigger_tree.identify_row(event.y)
+        if not item or not self.s2c_mode_current_s2c or not self.s2c_mode_current_config:
+            return
+
+        index = self.s2c_mode_custom_trigger_tree.index(item)
+        s2c_name = self.s2c_mode_current_s2c.name
+
+        if s2c_name not in self.s2c_mode_current_config.s2c_triggers:
+            return
+
+        triggers = self.s2c_mode_current_config.s2c_triggers[s2c_name].custom_triggers
+        if index >= len(triggers):
+            return
+
+        trigger = triggers[index]
+        dialog = S2CTriggerEditDialog(self, trigger)
+        self.wait_window(dialog)
+
+        if dialog.result:
+            trigger.name = dialog.result["name"]
+            trigger.type = dialog.result["type"]
+            trigger.condition = dialog.result["condition"]
+            trigger.count = dialog.result["count"]
+            trigger.ordered = dialog.result["ordered"]
+            self._load_s2c_triggers(s2c_name)
+            self.s2c_mode_triggers_modified = True
+            self.status_var.set(f"已更新触发条件: {trigger.name}")
+
+    def _save_s2c_triggers(self):
+        """保存S2C触发条件"""
+        if not self.s2c_mode_current_dnet or not self.s2c_mode_current_config:
+            messagebox.showwarning("提示", "没有可保存的配置")
+            return
+
+        if self.config_manager.save_config(self.s2c_mode_current_dnet.relative_path, self.s2c_mode_current_config):
+            self.s2c_mode_triggers_modified = False
+            self.status_var.set("S2C触发条件已保存")
+            messagebox.showinfo("保存成功", "S2C触发条件已成功保存")
+        else:
+            messagebox.showerror("保存失败", "保存失败，请检查文件权限")
 
     def _on_close(self):
         """关闭窗口"""

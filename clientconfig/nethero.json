@@ -28,5 +28,18 @@
         }
       ]
     }
+  },
+  "s2c_triggers": {
+    "S2CAddHero": {
+      "custom_triggers": [
+        {
+          "name": "游戏启动后触发",
+          "type": "必然回包",
+          "condition": "",
+          "count": "一次",
+          "ordered": true
+        }
+      ]
+    }
   }
 }

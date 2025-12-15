@@ -23,6 +23,22 @@ class S2CResponse:
 
 
 @dataclass
+class S2CTrigger:
+    """S2C自定义触发条件"""
+    name: str  # 触发条件名称/描述
+    type: str = "必然回包"  # "必然回包" 或 "按条件回包"
+    condition: str = ""  # 备注说明
+    count: str = "一次"  # "一次" 或 "多次"
+    ordered: bool = True  # 是否有序
+
+
+@dataclass
+class S2CTriggerConfig:
+    """单个S2C的触发条件配置"""
+    custom_triggers: List[S2CTrigger] = field(default_factory=list)
+
+
+@dataclass
 class OrderGroup:
     """顺序组定义"""
     name: str  # 组名，如 "A", "B"
@@ -43,6 +59,7 @@ class C2SConfig:
     dnet_file: str
     description: str
     c2s_mappings: Dict[str, C2SMapping] = field(default_factory=dict)
+    s2c_triggers: Dict[str, S2CTriggerConfig] = field(default_factory=dict)  # S2C自定义触发条件
 
 
 class ConfigManager:
@@ -137,7 +154,7 @@ class ConfigManager:
 
     def _config_to_dict(self, config: C2SConfig) -> dict:
         """将配置对象转换为字典"""
-        return {
+        result = {
             "dnet_file": config.dnet_file,
             "description": config.description,
             "c2s_mappings": {
@@ -164,6 +181,25 @@ class ConfigManager:
                 for c2s_name, mapping in config.c2s_mappings.items()
             }
         }
+        # 添加S2C触发条件（如果有）
+        if config.s2c_triggers:
+            result["s2c_triggers"] = {
+                s2c_name: {
+                    "custom_triggers": [
+                        {
+                            "name": t.name,
+                            "type": t.type,
+                            "condition": t.condition,
+                            "count": t.count,
+                            "ordered": t.ordered
+                        }
+                        for t in trigger_config.custom_triggers
+                    ]
+                }
+                for s2c_name, trigger_config in config.s2c_triggers.items()
+                if trigger_config.custom_triggers  # 只保存有数据的
+            }
+        return result
 
     def _dict_to_config(self, data: dict) -> C2SConfig:
         """将字典转换为配置对象"""
@@ -200,6 +236,19 @@ class ConfigManager:
                 responses=responses,
                 order_groups=order_groups
             )
+
+        # 加载S2C触发条件
+        for s2c_name, trigger_data in data.get("s2c_triggers", {}).items():
+            triggers = []
+            for t in trigger_data.get("custom_triggers", []):
+                triggers.append(S2CTrigger(
+                    name=t.get("name", ""),
+                    type=t.get("type", "必然回包"),
+                    condition=t.get("condition", ""),
+                    count=t.get("count", "一次"),
+                    ordered=t.get("ordered", True)
+                ))
+            config.s2c_triggers[s2c_name] = S2CTriggerConfig(custom_triggers=triggers)
 
         return config
 
